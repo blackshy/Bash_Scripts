@@ -1,4 +1,4 @@
 Bash-Scripts
 ============
 
-The Bash Scripts Test Directory For Me.
+The Bash Scripts Test Directory For Myself.
