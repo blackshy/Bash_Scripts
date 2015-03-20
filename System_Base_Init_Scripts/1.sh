@@ -1,4 +1,4 @@
-#!/bin/bash  -x
+#!/bin/bash
 #Program:
 #	Use this scripts can help you to make a new host ready with your own habit;
 #	Like set 'network' 'hostname' tun off the 'iptables' 'NetworkManager' and 'SElinux'!
