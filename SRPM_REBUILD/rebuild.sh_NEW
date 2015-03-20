@@ -1,0 +1,107 @@
+#!/bin/bash -x
+Rebuild_SRPM() {
+local SRPM_PATH_DIR=/root/rpmbuild/SRPMS
+local SPEC_PATH_DIR=/root/rpmbuild/SPECS
+local SRPM_Package_Name=$1
+local SPEC_Name=`echo $SRPM_Package_Name|sed 's/.\$SRPM_Release.src.rpm$//g'|sed 's/-[0-9]*/-/g'|cut -d'.' -f1|sed 's/-$//g'`
+local RPM_PATH_DIR=/root/rpmbuild/RPMS
+local BUILD_ARCH=noarch
+rpm -ivh $SRPM_PATH_DIR/$SRPM_Package_Name
+rpmbuild -bb $SPEC_PATH_DIR/$SPEC_Name.spec
+local RETURN=$?
+if [ $RETURN -eq 0 ]
+	then
+	echo -e "Sir! You have build Package from $SRPM_Package_Name sucessfully!\n"
+	for ARCHS in `ls -1 $RPM_PATH_DIR`;do
+		if [ -f `ls $RPM_PATH_DIR/$ARCHS/$SPEC_Name-[0-9]*.rpm` ]
+			then BUILD_ARCH=$ARCHS
+		fi
+	done
+	RPM_PATH_DIR=$RPM_PATH_DIR/$BUILD_ARCH
+	local RPM_Package_Name=`basename $RPM_PATH_DIR/$SPEC_Name-[0-9]*.rpm`
+	Install_RPM "$RPM_Package_Name";
+else
+	SRPM_DEP "$SRPM_Package_Name";	
+fi
+}
+
+SRPM_DEP() {
+local SRPM_PATH_DIR=/root/rpmbuild/SRPMS
+local SPEC_PATH_DIR=/root/rpmbuild/SPECS
+local SRPM_Package_Name=$1
+local SPEC_Name=`echo $SRPM_Package_Name|sed 's/.\$SRPM_Release.src.rpm$//g'|sed 's/-[0-9]*/-/g'|cut -d'.' -f1|sed 's/-$//g'`
+rpm -ivh $SRPM_PATH_DIR/$SRPM_Package_Name
+mkdir -p /tmp/SW/SRPM_DEP/SRPM
+local TMP_DIR=/tmp/SW/SRPM_DEP/SRPM
+rpmbuild -bb $SPEC_PATH_DIR/$SPEC_Name.spec > $TMP_DIR/$SRPM_Package_Name 2>&1
+cat $TMP_DIR/$SRPM_Package_Name |grep "needed\ by" |cut -d')' -f1|cut -d'(' -f2|sed 's/\:\:/-/g'|sed 's/^/perl-/g' > $TMP_DIR/$SRPM_Package_Name.NeedPackages.swap
+local NEED_SRPM_COUNT=`cat $TMP_DIR/$SRPM_Package_Name.NeedPackages.swap |wc -l`
+for ((i=0;i<$NEED_SRPM_COUNT;i++));do
+	for NEED_SRPM in `cat $TMP_DIR/$SRPM_Package_Name.NeedPackages.swap`;do
+		local NEED_SRPM=`basename $SRPM_PATH_DIR/$NEED_SRPM-[0-9]*.rpm`	
+		Rebuild_SRPM "$NEED_SRPM"
+	done
+done
+}
+
+Install_RPM() {
+local RPM_PATH_DIR=/root/rpmbuild/RPMS
+local RPM_Package_Name=$1
+local BUILD_ARCH=noarch
+for ARCHS in `ls -1 $RPM_PATH_DIR`;do
+	if [ -f `ls $RPM_PATH_DIR/$ARCHS/$RPM_Package_Name` ]
+		then BUILD_ARCH=$ARCHS
+	fi
+done
+RPM_PATH_DIR=$RPM_PATH_DIR/$BUILD_ARCH
+echo -e "Sir! I am trying to install the $RPM_Package_Name Package!\n"
+rpm -ivh --force "$RPM_PATH_DIR/$RPM_Package_Name";
+local RETURN=$?
+if [ $RETURN -eq 0 ]
+	then
+	echo -e "Sir! The $RPM_Package_Name Package has been installed sucessfully!\n"
+else
+	RPM_DEP "$RPM_Package_Name";	
+fi
+rpm -ivh --force "$RPM_PATH_DIR/$RPM_Package_Name";
+echo -e "Sir! The $RPM_Package_Name Package has been installed sucessfully!\n"
+}
+
+RPM_DEP() {
+mkdir -p /tmp/SW/RPM_DEP/RPM
+TMP_DIR=/tmp/SW/RPM_DEP/RPM
+local RPM_PATH_DIR=/root/rpmbuild/RPMS
+local RPM_Package_Name=$1
+local BUILD_ARCH=noarch
+local SRPM_PATH_DIR=/root/rpmbuild/SRPMS
+for ARCHS in `ls -1 $RPM_PATH_DIR`;do
+	if [ -f `ls $RPM_PATH_DIR/$ARCHS/$RPM_Package_Name` ]
+		then BUILD_ARCH=$ARCHS
+	fi
+done
+RPM_PATH_DIR=$RPM_PATH_DIR/$BUILD_ARCH
+rpm -ivh --force "$RPM_PATH_DIR/$RPM_Package_Name" > $TMP_DIR/$RPM_Package_Name 2>&1;
+NEED_RPM_COUNT=`cat $TMP_DIR/$RPM_Package_Name |grep "needed\ by"|wc -l`
+for ((i=0;i<$NEED_RPM_COUNT;i++)) ;do
+	for NEED_RPM in `cat $TMP_DIR/$RPM_Package_Name|grep "needed\ by"|cut -d' ' -f1`;do
+	yum -y install $NEED_RPM	
+	local RETURN=$?
+	if [ $RETURN -eq 0 ]
+		then echo -e "Sir! The package which needed by $RPM_Package_Name is installed successfully!\n"
+	else
+		local NEED_SRPM=`basename $SRPM_PATH_DIR/$NEED_RPM-[0-9]*.src.rpm`
+		Rebuild_SRPM "$NEED_SRPM"
+	fi
+	done
+done
+}
+
+
+if [ `rpm -qa |grep rpm-build|wc -l` == 0 ]
+	then yum install -y rpm-build
+else	
+	echo -e "Sir! You can use rpmbuild to work now!\n"
+fi
+SRPM_Release=fc17
+Rebuild_SRPM "$1";
+exit 0;
