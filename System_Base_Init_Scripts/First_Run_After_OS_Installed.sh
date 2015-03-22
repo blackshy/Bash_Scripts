@@ -25,7 +25,7 @@ SET_COLOR(){
 }
 
 ERROR_STATUS(){
-	exit 0
+	exit 1
 }
 
 # Gather Net Infomation
@@ -77,7 +77,7 @@ NETMASK)
 		if [ "$Mask_Segs" -eq 4 ];then break;
 		else 
 			echo ""
-			echo "Please ReEnter Your New NetMask With Right Schema: [XXX-XXX-XXX-XXX]"
+			echo "Please ReEnter Your New NetMask With Right Schema: [XXX.XXX.XXX.XXX]"
 			echo ""
 			read -p "Please Enter Your New NetMask Here: " New_NetMask
 			echo ""
